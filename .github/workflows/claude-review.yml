@@ -1,0 +1,40 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+jobs:
+  review:
+    if: |
+      (github.event_name == 'pull_request') ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude Code Review
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          review_prompt: |
+            Review this PR against the project's CLAUDE.md standards:
+            - Conventional Commits used correctly?
+            - Type hints on all function signatures?
+            - Hardware interfaces wrapped in try/except?
+            - No bare except: blocks?
+            - Logging used instead of print()?
+            - Data tagged with car_id and trip_id where applicable?
+            - No secrets committed (.env values, SSH keys, WiFi passwords)?
+            - SQLite writes flushed properly?
+
+            Be concise. Flag real issues, skip nitpicks.
