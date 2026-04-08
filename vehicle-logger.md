@@ -14,7 +14,7 @@ The system will eventually be deployed across 3 vehicles. Development begins wit
 |---|---|---|
 | Single-board computer | Raspberry Pi Zero 2W | Main compute, runs all scripts |
 | OBD-II adapter | Vgate iCar Pro Bluetooth 3.0 | Engine data via Classic Bluetooth |
-| GPS receiver | GlobalSat BU-353-S4 | Location data via USB |
+| GPS receiver | VK-162 (u-blox M8030, Geekstory) | Location data via USB |
 | USB OTG adapter | Micro USB to USB-A | Connects GPS to Pi Zero |
 | Storage | 32GB microSD | OS + trip data |
 | Power | 12V USB car adapter | Powers Pi from cigarette lighter |

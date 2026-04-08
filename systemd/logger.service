@@ -1,0 +1,15 @@
+[Unit]
+Description=Vehicle OBD + GPS Logger
+After=bluetooth.target gpsd.service
+Wants=bluetooth.target gpsd.service
+
+[Service]
+ExecStart=/usr/bin/python3 /home/pi/vehicle-logger/logger.py
+WorkingDirectory=/home/pi/vehicle-logger
+Restart=on-failure
+RestartSec=5
+User=pi
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
