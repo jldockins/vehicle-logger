@@ -1,54 +1,53 @@
-# Session Log — 2026-04-07
+# Session Log — 2026-04-09
 
 ## Accomplished
-- Built the entire application codebase from the project brief
-- Created `config.py` with `.env` support for secrets via `python-dotenv`
-- Created `db/schema.sql` with `log` and `dtcs` tables, WAL mode
-- Created `logger.py` — main OBD-II + GPS polling loop with trip detection
-- Created `sync.py` — WiFi-triggered rsync of trip SQLite files to home server
-- Created `server/ingest.py` — FastAPI endpoint that parses rsynced SQLite into InfluxDB
-- Created `shutdown_handler.py` — safe shutdown via OBD disconnect detection (no GPIO needed)
-- Created `systemd/logger.service` and `systemd/shutdown-handler.service`
-- Created `setup/setup.sh` — one-time Pi setup script
-- Created `.env.example` and `server/.env.example` templates
-- Created `requirements.txt` (Pi) and `server/requirements.txt` (Unraid)
-- Wrote 58 passing tests across 3 test files (test_logger, test_sync, test_ingest)
-- Updated `vehicle-logger.md` to reflect VK-162 GPS receiver (replacing BU-353-S4)
-- Committed and pushed to GitHub
+- Flashed Pi Zero 2W with Raspberry Pi OS Lite (hostname: van-logger, user: nero)
+- Cloned repo, installed all dependencies (obd, python-dotenv, gps, pytest, ruff)
+- Fixed setup.sh: removed `rfcomm` package (doesn't exist on Bookworm), replaced with `bluez-tools`
+- Fixed requirements.txt: package name is `obd` not `python-obd`
+- GPS receiver (VK-162) detected as `/dev/ttyACM0` (not `/dev/ttyUSB0`) — updated gpsd config and all code
+- Paired Vgate iCar Pro Bluetooth OBD adapter (MAC: 10:21:3E:4F:43:70, shows as "V-LINK")
+- Bound rfcomm: `sudo rfcomm bind /dev/rfcomm0 10:21:3E:4F:43:70 1`
+- Two successful test drives with real data capture
+- First drive: 676 rows, GPS intermittent (288/676 rows with fix) — identified blocking gpsd issue
+- Fixed poll_gps to use `session.waiting()` for non-blocking reads
+- Second drive: 273 rows, 100% GPS coverage — fix confirmed working
+- 59/59 tests passing locally
 
 ## Current State
 - **Branch**: `main`
-- **Uncommitted changes**: No (only the session log is untracked)
-- **Build/test status**: 58/58 tests passing
+- **Uncommitted changes**: No (session log not yet written at time of commit)
+- **Build/test status**: 59/59 tests passing on Mac, 44/44 Pi-side tests passing on Pi
 
 ## In Progress
-- Nothing actively in progress — all planned code is complete
+- GPS speed discrepancy: GPS speed reads ~60% of OBD speed at steady state (e.g., OBD 30 mph → GPS 18 mph)
+- Need to check raw gpsd TPV output while driving (`gpspipe -w | grep speed`) to determine if it's a unit issue
+- gpsd WATCH config shows `scaled: false`, so speed should be in m/s — but the ratio doesn't match any obvious unit confusion
 
 ## Decisions Made
-- **GPS receiver changed**: User is buying the VK-162 (Geekstory, u-blox M8030) instead of the GlobalSat BU-353-S4 (discontinued/overpriced). Same USB/gpsd interface, no code changes needed.
-- **Shutdown detection via OBD disconnect**: Since the Pi has no GPIO headers, shutdown_handler.py monitors rfcomm device presence and USB power supply status instead of a GPIO voltage pin.
-- **Sync uses rsync over SSH**: Trip .db files land on the server filesystem, then ingest.py reads them — no HTTP POST from Pi needed.
-- **Manifest pattern for idempotency**: Both sync.py and ingest.py use JSON manifest files (.synced.json, .ingested.json) to track processed files, saving after each file for crash safety.
-- **conftest.py mocks hardware modules**: `obd` and `gps` Python packages aren't available on Python 3.14 (Mac), so conftest.py stubs them at the sys.modules level so tests run anywhere.
-- **Secrets in .env, config in config.py**: SERVER_HOST, BLUETOOTH_MAC, HOME_SSID, INFLUXDB_TOKEN go in .env (gitignored). CAR_ID, POLL_RATE_HZ, OBD_PIDS stay in config.py (safe to commit).
-
-## Hardware Status
-- **Ordered**: Pi Zero 2W Basic Kit + USB OTG cable (CanaKit)
-- **Arriving tomorrow (2026-04-08)**: Vgate iCar Pro Bluetooth 3.0 OBD-II adapter
-- **Still need to order**: VK-162 USB GPS receiver (Geekstory, u-blox M8030, ~$12-15 on Amazon)
+- **First vehicle is the van**, not the 4Runner as originally planned
+- **Hostname**: `van-logger` (pattern: `{vehicle}-logger` for fleet)
+- **Username**: `nero` (not the default `pi`)
+- **OBD adapter name**: Shows as "V-LINK" in Bluetooth, not "Vgate" or "iCar"
+- **GPS device path**: `/dev/ttyACM0` (VK-162 u-blox uses ACM, not ttyUSB)
+- **Repo made public** temporarily for git pull to Pi, then back to private
+- **rfcomm persistence not yet solved** — needs to be re-bound after reboot
 
 ## Open Questions / Blockers
-- Hardware hasn't arrived yet — no on-device testing possible
-- `ANTHROPIC_API_KEY` secret still needs to be added to GitHub repo for CI review workflow
-- Safe shutdown timing is a guess (5s delay) — needs real-world testing with the actual USB car adapter's capacitor hold-up time
-- rfcomm persistence across reboots not yet handled (needs rc.local or a systemd oneshot)
+- **GPS speed mismatch** — need to diagnose with `gpspipe` while driving. Could be: OBD speedometer inflation (~10%), unit conversion bug, or stale GPS data
+- **rfcomm not persistent across reboots** — need to add to rc.local or a systemd oneshot service
+- **PATH on Pi** — `~/.local/bin` not on PATH by default, pytest/ruff not available without `export PATH="$HOME/.local/bin:$PATH"`
+- Server side (InfluxDB + Grafana on Unraid) not yet set up
+
+## Hardware Confirmed Working
+- Pi Zero 2W: running, SSH accessible at `van-logger.local`
+- VK-162 GPS: 3D fix, 15+ satellites, `/dev/ttyACM0`
+- Vgate iCar Pro BT 3.0: paired, trusted, rfcomm bound at `/dev/rfcomm0`, MAC `10:21:3E:4F:43:70`
 
 ## Next Steps
-1. Order the VK-162 GPS receiver
-2. When Pi arrives: flash Raspberry Pi OS Lite, clone repo, run `setup/setup.sh`
-3. Pair OBD adapter via bluetoothctl, test with `cgps -s` for GPS
-4. Test logger.py with real hardware — verify OBD PIDs and GPS data
-5. Set up InfluxDB + Grafana on Unraid
-6. Deploy server/ingest.py on Unraid
-7. Test full end-to-end: drive → log → come home → sync → ingest → Grafana
-8. Build initial Grafana dashboard (vehicle health focus)
+1. Diagnose GPS speed issue — run `gpspipe -w` while driving to check raw speed values
+2. Fix rfcomm persistence across reboots (systemd oneshot or rc.local)
+3. Add `~/.local/bin` to PATH in `.bashrc` on Pi
+4. Set up InfluxDB + Grafana on Unraid
+5. Deploy server/ingest.py on Unraid
+6. Test full sync: drive → come home on WiFi → sync → ingest → dashboard
