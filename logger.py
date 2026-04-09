@@ -109,7 +109,11 @@ def connect_gps() -> gps | None:
 
 
 def poll_gps(session: gps) -> dict[str, float | int | None]:
-    """Read the latest GPS fix from gpsd."""
+    """Read the latest GPS fix from gpsd.
+
+    Drains all pending messages and returns data from the most recent TPV
+    report, so the main loop never blocks waiting for GPS.
+    """
     data: dict[str, float | int | None] = {
         "lat": None,
         "lon": None,
@@ -119,8 +123,11 @@ def poll_gps(session: gps) -> dict[str, float | int | None]:
         "gps_fix": 0,
     }
     try:
-        report = session.next()
-        if report.get("class") == "TPV":
+        # Read all pending messages, keep the latest TPV
+        while session.waiting():
+            report = session.next()
+            if report.get("class") != "TPV":
+                continue
             fix = getattr(report, "mode", 0)
             data["gps_fix"] = fix
             if fix >= 2:

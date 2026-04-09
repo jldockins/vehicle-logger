@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-PROJECT_DIR="/home/pi/vehicle-logger"
+PROJECT_DIR="/home/nero/vehicle-logger"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # ---------------------------------------------------------------------------
@@ -39,7 +39,7 @@ apt-get install -y -qq \
     python3-gps \
     bluetooth \
     bluez \
-    rfcomm \
+    bluez-tools \
     rsync \
     wireless-tools
 
@@ -52,7 +52,7 @@ echo "[2/5] Configuring gpsd..."
 
 cat > /etc/default/gpsd << 'EOF'
 # GPS device — VK-162 USB GPS receiver
-DEVICES="/dev/ttyUSB0"
+DEVICES="/dev/ttyACM0"
 GPSD_OPTIONS="-n"
 USBAUTO="true"
 START_DAEMON="true"
@@ -76,7 +76,7 @@ echo "      Done."
 echo "[4/5] Creating directories..."
 mkdir -p "${PROJECT_DIR}/trips"
 mkdir -p "${PROJECT_DIR}/logs"
-chown -R pi:pi "${PROJECT_DIR}/trips" "${PROJECT_DIR}/logs"
+chown -R nero:nero "${PROJECT_DIR}/trips" "${PROJECT_DIR}/logs"
 echo "      Done."
 
 # ---------------------------------------------------------------------------

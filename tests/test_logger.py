@@ -137,9 +137,9 @@ class TestPollGPS:
         report.speed = 20.0  # m/s
         report.track = 182.3
         report.alt = 213.0
+        mock_session.waiting.side_effect = [True, False]
         mock_session.next.return_value = report
 
-        # getattr on MagicMock returns the attrs we set
         data = logger.poll_gps(mock_session)
 
         assert data["gps_fix"] == 3
@@ -154,6 +154,7 @@ class TestPollGPS:
         report = MagicMock()
         report.get.side_effect = lambda k: "TPV" if k == "class" else None
         report.mode = 0
+        mock_session.waiting.side_effect = [True, False]
         mock_session.next.return_value = report
 
         # Need to make getattr return None for position fields
@@ -169,8 +170,18 @@ class TestPollGPS:
         assert data["lat"] is None
         assert data["lon"] is None
 
+    def test_no_waiting_data_returns_defaults(self):
+        mock_session = MagicMock()
+        mock_session.waiting.return_value = False
+
+        data = logger.poll_gps(mock_session)
+
+        assert data["gps_fix"] == 0
+        assert data["lat"] is None
+
     def test_stop_iteration_returns_defaults(self):
         mock_session = MagicMock()
+        mock_session.waiting.return_value = True
         mock_session.next.side_effect = StopIteration
 
         data = logger.poll_gps(mock_session)

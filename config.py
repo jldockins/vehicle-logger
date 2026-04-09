@@ -24,7 +24,7 @@ CAR_ID: str = os.getenv("CAR_ID", "4runner")
 # Hardware paths
 # ---------------------------------------------------------------------------
 RFCOMM_PORT: str = os.getenv("RFCOMM_PORT", "/dev/rfcomm0")
-GPS_DEVICE: str = os.getenv("GPS_DEVICE", "/dev/ttyUSB0")
+GPS_DEVICE: str = os.getenv("GPS_DEVICE", "/dev/ttyACM0")
 BLUETOOTH_MAC: str = os.getenv("BLUETOOTH_MAC", "")
 
 # ---------------------------------------------------------------------------
@@ -44,7 +44,7 @@ LOGS_DIR: Path = PROJECT_ROOT / "logs"
 # ---------------------------------------------------------------------------
 HOME_SSID: str = os.getenv("HOME_SSID", "")
 SERVER_HOST: str = os.getenv("SERVER_HOST", "")
-SERVER_USER: str = os.getenv("SERVER_USER", "pi")
+SERVER_USER: str = os.getenv("SERVER_USER", "nero")
 SERVER_SYNC_PATH: str = os.getenv("SERVER_SYNC_PATH", "/mnt/user/vehicle-logs/")
 
 # ---------------------------------------------------------------------------
