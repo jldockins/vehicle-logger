@@ -4,11 +4,11 @@ After=bluetooth.target gpsd.service
 Wants=bluetooth.target gpsd.service
 
 [Service]
-ExecStart=/usr/bin/python3 /home/pi/vehicle-logger/logger.py
-WorkingDirectory=/home/pi/vehicle-logger
+ExecStart=/usr/bin/python3 /home/nero/vehicle-logger/logger.py
+WorkingDirectory=/home/nero/vehicle-logger
 Restart=on-failure
 RestartSec=5
-User=pi
+User=nero
 Environment=PYTHONUNBUFFERED=1
 
 [Install]

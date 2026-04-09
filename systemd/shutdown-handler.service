@@ -4,8 +4,8 @@ After=logger.service
 Wants=logger.service
 
 [Service]
-ExecStart=/usr/bin/python3 /home/pi/vehicle-logger/shutdown_handler.py
-WorkingDirectory=/home/pi/vehicle-logger
+ExecStart=/usr/bin/python3 /home/nero/vehicle-logger/shutdown_handler.py
+WorkingDirectory=/home/nero/vehicle-logger
 Restart=on-failure
 RestartSec=5
 User=root

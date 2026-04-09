@@ -200,7 +200,8 @@ EVENT="$1"
 HOME_SSID="YourHomeNetworkName"
 
 if [[ "$EVENT" == "up" && "$SSID" == "$HOME_SSID" ]]; then
-    /usr/bin/python3 /home/pi/vehicle-logger/sync.py &
+    /usr/bin/python3 /home/nero/vehicle-logger/sync.py &
+
 fi
 ```
 
@@ -228,10 +229,10 @@ After=bluetooth.target gpsd.service
 Wants=bluetooth.target gpsd.service
 
 [Service]
-ExecStart=/usr/bin/python3 /home/pi/vehicle-logger/logger.py
+ExecStart=/usr/bin/python3 /home/nero/vehicle-logger/logger.py
 Restart=on-failure
 RestartSec=5
-User=pi
+User=nero
 
 [Install]
 WantedBy=multi-user.target
