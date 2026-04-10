@@ -8,10 +8,12 @@ Designed to run as a systemd service on a Raspberry Pi Zero 2W.
 """
 
 import logging
+import signal
 import sqlite3
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from types import FrameType
 
 import obd
 from gps import gps, WATCH_ENABLE, WATCH_NEWSTYLE
@@ -31,6 +33,18 @@ logging.basicConfig(
     ],
 )
 log = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Graceful shutdown state
+# ---------------------------------------------------------------------------
+_stop_requested: bool = False
+
+
+def _handle_shutdown_signal(signum: int, _frame: FrameType | None) -> None:
+    """Signal handler for SIGTERM / SIGINT — sets the stop flag."""
+    global _stop_requested
+    log.info("Received signal %d, shutting down gracefully", signum)
+    _stop_requested = True
 
 # ---------------------------------------------------------------------------
 # Map python-obd command names → SQLite column names
@@ -54,16 +68,20 @@ PID_TO_COLUMN: dict[str, str] = {
 # OBD connection
 # ---------------------------------------------------------------------------
 def connect_obd() -> obd.OBD | None:
-    """Attempt to connect to the OBD-II adapter over rfcomm."""
+    """Attempt to connect to the OBD-II adapter over rfcomm.
+
+    Returns None silently on failure — the main loop emits a single
+    human-readable message per state transition rather than spamming
+    tracebacks every retry. Errors are captured at DEBUG level for
+    diagnostic purposes.
+    """
     try:
         connection = obd.OBD(config.RFCOMM_PORT)
         if connection.is_connected():
-            log.info("OBD connected on %s", config.RFCOMM_PORT)
             return connection
-        log.warning("OBD adapter found but not connected")
         connection.close()
-    except Exception:
-        log.exception("Failed to connect to OBD adapter")
+    except Exception as exc:
+        log.debug("OBD connection error: %s", exc)
     return None
 
 
@@ -77,8 +95,8 @@ def poll_obd(connection: obd.OBD) -> dict[str, float | None]:
         try:
             response = connection.query(obd.commands[pid])
             data[column] = response.value.magnitude if not response.is_null() else None
-        except Exception:
-            log.exception("Error polling PID %s", pid)
+        except Exception as exc:
+            log.debug("Error polling PID %s: %s", pid, exc)
             data[column] = None
     return data
 
@@ -222,83 +240,124 @@ def is_engine_running(obd_data: dict[str, float | None]) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Graceful shutdown
+# ---------------------------------------------------------------------------
+def graceful_shutdown(
+    trip_id: str | None,
+    trip_db: sqlite3.Connection | None,
+    obd_conn: obd.OBD | None,
+) -> None:
+    """Close open resources cleanly so no SQLite WAL sidecar files are left behind.
+
+    Explicitly truncate-checkpoints the WAL before closing the SQLite
+    connection, so the resulting .db file is self-contained and safe to
+    rsync without the accompanying .db-wal and .db-shm files.
+    """
+    if trip_db is not None:
+        try:
+            trip_db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            trip_db.close()
+            if trip_id is not None:
+                log.info("Trip ended: %s (shutdown signal)", trip_id)
+        except Exception as exc:
+            log.warning("Error closing trip database: %s", exc)
+
+    if obd_conn is not None:
+        try:
+            obd_conn.close()
+        except Exception as exc:
+            log.debug("Error closing OBD connection: %s", exc)
+
+    log.info("Logger shutdown complete")
+
+
+# ---------------------------------------------------------------------------
 # Main loop
 # ---------------------------------------------------------------------------
 def main() -> None:
+    signal.signal(signal.SIGTERM, _handle_shutdown_signal)
+    signal.signal(signal.SIGINT, _handle_shutdown_signal)
+
     log.info("Vehicle logger starting — car_id=%s", config.CAR_ID)
 
-    # Connect to hardware (retries on failure)
     obd_conn: obd.OBD | None = None
     gps_session: gps | None = None
+    obd_was_available: bool | None = None  # tracks state transitions for logging
 
     trip_id: str | None = None
     trip_db: sqlite3.Connection | None = None
     last_engine_time: float = 0.0
     poll_interval = 1.0 / config.POLL_RATE_HZ
 
-    while True:
-        loop_start = time.monotonic()
+    try:
+        while not _stop_requested:
+            loop_start = time.monotonic()
 
-        # --- Ensure OBD connection ---
-        if obd_conn is None or not obd_conn.is_connected():
-            obd_conn = connect_obd()
-            if obd_conn is None:
-                log.info("OBD not available, retrying in 5s")
-                time.sleep(5)
-                continue
+            # --- Ensure OBD connection ---
+            if obd_conn is None or not obd_conn.is_connected():
+                obd_conn = connect_obd()
+                if obd_conn is None:
+                    if obd_was_available is not False:
+                        log.info("OBD not available — waiting for adapter")
+                        obd_was_available = False
+                    time.sleep(5)
+                    continue
+                log.info("OBD connected on %s", config.RFCOMM_PORT)
+                obd_was_available = True
 
-        # --- Ensure GPS connection ---
-        if gps_session is None:
-            gps_session = connect_gps()
+            # --- Ensure GPS connection ---
+            if gps_session is None:
+                gps_session = connect_gps()
 
-        # --- Poll sensors ---
-        obd_data = poll_obd(obd_conn)
-        gps_data = poll_gps(gps_session) if gps_session else {
-            "lat": None, "lon": None, "speed_gps": None,
-            "heading": None, "altitude": None, "gps_fix": 0,
-        }
+            # --- Poll sensors ---
+            obd_data = poll_obd(obd_conn)
+            gps_data = poll_gps(gps_session) if gps_session else {
+                "lat": None, "lon": None, "speed_gps": None,
+                "heading": None, "altitude": None, "gps_fix": 0,
+            }
 
-        engine_on = is_engine_running(obd_data)
+            engine_on = is_engine_running(obd_data)
 
-        # --- Trip start ---
-        if engine_on and trip_id is None:
-            trip_id = generate_trip_id()
-            trip_db = create_trip_db(trip_id)
-            last_engine_time = time.monotonic()
-            log.info("Trip started: %s", trip_id)
+            # --- Trip start ---
+            if engine_on and trip_id is None:
+                trip_id = generate_trip_id()
+                trip_db = create_trip_db(trip_id)
+                last_engine_time = time.monotonic()
+                log.info("Trip started: %s", trip_id)
 
-        # --- Trip active: write data ---
-        if engine_on and trip_db is not None:
-            last_engine_time = time.monotonic()
-            write_record(trip_db, trip_id, obd_data, gps_data)
+            # --- Trip active: write data ---
+            if engine_on and trip_db is not None:
+                last_engine_time = time.monotonic()
+                write_record(trip_db, trip_id, obd_data, gps_data)
 
-            dtcs = poll_dtcs(obd_conn)
-            if dtcs:
-                write_dtcs(trip_db, trip_id, dtcs)
+                dtcs = poll_dtcs(obd_conn)
+                if dtcs:
+                    write_dtcs(trip_db, trip_id, dtcs)
 
-        # --- Trip end detection ---
-        if trip_id is not None and not engine_on:
-            idle_seconds = time.monotonic() - last_engine_time
-            if idle_seconds >= config.TRIP_END_TIMEOUT_SEC:
-                log.info(
-                    "Trip ended: %s (idle for %ds)", trip_id, int(idle_seconds)
-                )
-                if trip_db is not None:
-                    trip_db.close()
-                trip_id = None
-                trip_db = None
+            # --- Trip end detection ---
+            if trip_id is not None and not engine_on:
+                idle_seconds = time.monotonic() - last_engine_time
+                if idle_seconds >= config.TRIP_END_TIMEOUT_SEC:
+                    log.info(
+                        "Trip ended: %s (idle for %ds)", trip_id, int(idle_seconds)
+                    )
+                    if trip_db is not None:
+                        trip_db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                        trip_db.close()
+                    trip_id = None
+                    trip_db = None
 
-        # --- Maintain ~1 Hz loop ---
-        elapsed = time.monotonic() - loop_start
-        sleep_time = max(0, poll_interval - elapsed)
-        if sleep_time > 0:
-            time.sleep(sleep_time)
+            # --- Maintain ~1 Hz loop ---
+            elapsed = time.monotonic() - loop_start
+            sleep_time = max(0, poll_interval - elapsed)
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+    finally:
+        graceful_shutdown(trip_id, trip_db, obd_conn)
 
 
 if __name__ == "__main__":
     try:
         main()
-    except KeyboardInterrupt:
-        log.info("Logger stopped by user")
     except Exception:
         log.exception("Logger crashed")

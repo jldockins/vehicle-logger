@@ -326,3 +326,53 @@ class TestConnectOBD:
         mock_obd_class.side_effect = Exception("No Bluetooth")
 
         assert logger.connect_obd() is None
+
+
+# ---------------------------------------------------------------------------
+# Graceful shutdown
+# ---------------------------------------------------------------------------
+class TestShutdownSignal:
+    def test_handler_sets_stop_flag(self, monkeypatch):
+        import signal as signal_module
+
+        monkeypatch.setattr(logger, "_stop_requested", False)
+        logger._handle_shutdown_signal(signal_module.SIGTERM, None)
+        assert logger._stop_requested is True
+
+
+class TestGracefulShutdown:
+    def test_checkpoints_and_closes_trip_db(self, trip_db, tmp_path):
+        # Write a few rows so the WAL has content
+        obd_data = {k: 0.0 for k in logger.PID_TO_COLUMN.values()}
+        gps_data = {
+            "lat": None, "lon": None, "speed_gps": None,
+            "heading": None, "altitude": None, "gps_fix": 0,
+        }
+        for _ in range(5):
+            logger.write_record(trip_db, "20260407-1200", obd_data, gps_data)
+
+        db_path = config.TRIPS_DIR / "test-car" / "20260407-1200.db"
+
+        logger.graceful_shutdown("20260407-1200", trip_db, None)
+
+        # After graceful shutdown: main DB exists, sidecar WAL/SHM files are gone.
+        assert db_path.exists()
+        assert not (db_path.parent / f"{db_path.name}-wal").exists()
+        assert not (db_path.parent / f"{db_path.name}-shm").exists()
+
+        # And the rows are readable from a fresh connection, proving the WAL
+        # was folded into the main DB before close.
+        fresh = sqlite3.connect(str(db_path))
+        try:
+            count = fresh.execute("SELECT COUNT(*) FROM log").fetchone()[0]
+            assert count == 5
+        finally:
+            fresh.close()
+
+    def test_handles_none_trip_db(self):
+        logger.graceful_shutdown(None, None, None)
+
+    def test_closes_obd_connection(self):
+        mock_conn = MagicMock()
+        logger.graceful_shutdown(None, None, mock_conn)
+        mock_conn.close.assert_called_once()
