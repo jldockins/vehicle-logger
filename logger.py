@@ -133,10 +133,10 @@ def poll_gps(session: gps) -> dict[str, float | int | None]:
             if fix >= 2:
                 data["lat"] = getattr(report, "lat", None)
                 data["lon"] = getattr(report, "lon", None)
-                # gpsd reports speed in m/s — convert to mph
+                # gpsd reports speed in m/s — convert to km/h
                 speed_ms = getattr(report, "speed", None)
                 if speed_ms is not None:
-                    data["speed_gps"] = speed_ms * 2.23694
+                    data["speed_gps"] = speed_ms * 3.6
                 data["heading"] = getattr(report, "track", None)
             if fix >= 3:
                 data["altitude"] = getattr(report, "alt", None)

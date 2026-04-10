@@ -7,15 +7,15 @@ CREATE TABLE IF NOT EXISTS log (
     car_id      TEXT    NOT NULL,
     trip_id     TEXT    NOT NULL,  -- YYYYMMDD-HHMM of trip start
 
-    -- OBD-II
-    speed_obd       REAL,   -- mph
+    -- OBD-II (canonical SI units — dashboard converts for display)
+    speed_obd       REAL,   -- km/h
     rpm             REAL,
     engine_load     REAL,   -- percent
-    coolant_temp    REAL,   -- °F
+    coolant_temp    REAL,   -- °C
     throttle_pos    REAL,   -- percent
     fuel_trim_short REAL,
     fuel_trim_long  REAL,
-    intake_temp     REAL,   -- °F
+    intake_temp     REAL,   -- °C
     intake_pressure REAL,   -- kPa (MAP)
     timing_advance  REAL,   -- degrees
     fuel_level      REAL,   -- percent
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS log (
     -- GPS
     lat         REAL,
     lon         REAL,
-    speed_gps   REAL,   -- mph
+    speed_gps   REAL,   -- km/h
     heading     REAL,   -- degrees
     altitude    REAL,   -- meters
     gps_fix     INTEGER -- 0=no fix, 2=2D, 3=3D

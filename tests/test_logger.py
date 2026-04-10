@@ -145,7 +145,7 @@ class TestPollGPS:
         assert data["gps_fix"] == 3
         assert data["lat"] == 42.9956
         assert data["lon"] == -71.4548
-        assert data["speed_gps"] == pytest.approx(20.0 * 2.23694, rel=1e-3)
+        assert data["speed_gps"] == pytest.approx(20.0 * 3.6, rel=1e-3)
         assert data["heading"] == 182.3
         assert data["altitude"] == 213.0
 

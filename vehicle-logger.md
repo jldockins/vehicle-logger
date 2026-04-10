@@ -56,14 +56,17 @@ The system will eventually be deployed across 3 vehicles. Development begins wit
 
 ## Data Collected
 
+All numeric values are stored in canonical SI / python-obd native units
+(km/h, °C, kPa, etc.). Grafana converts to local units at display time.
+
 ### OBD-II (via python-obd)
-- Vehicle speed (mph)
+- Vehicle speed (km/h)
 - RPM
 - Engine load (%)
-- Coolant temperature
+- Coolant temperature (°C)
 - Throttle position
 - Short and long term fuel trim
-- Intake air temperature
+- Intake air temperature (°C)
 - Manifold absolute pressure
 - Ignition timing advance
 - Fuel tank level
@@ -94,15 +97,15 @@ Each log entry (written at ~1Hz polling rate):
   "timestamp": "2026-04-06T14:23:01Z",
   "car_id": "4runner",          # unique per vehicle
   "trip_id": "20260406-1420",   # YYYYMMDD-HHMM of trip start
-  "speed_obd": 45.2,            # mph from OBD
-  "speed_gps": 44.8,            # mph from GPS
+  "speed_obd": 72.8,            # km/h from OBD
+  "speed_gps": 72.1,            # km/h from GPS
   "rpm": 1850,
   "engine_load": 32.5,
-  "coolant_temp": 195,
+  "coolant_temp": 90,           # °C
   "throttle_pos": 18.2,
   "fuel_trim_short": 1.5,
   "fuel_trim_long": -0.8,
-  "intake_temp": 72,
+  "intake_temp": 22,            # °C
   "map": 101.3,
   "timing_advance": 12.0,
   "fuel_level": 68.0,
