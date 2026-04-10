@@ -1,7 +1,7 @@
 [Unit]
 Description=Vehicle OBD + GPS Logger
-After=bluetooth.target gpsd.service
-Wants=bluetooth.target gpsd.service
+After=bluetooth.target gpsd.service rfcomm-bind.service
+Wants=bluetooth.target gpsd.service rfcomm-bind.service
 
 [Service]
 ExecStart=/usr/bin/python3 /home/nero/vehicle-logger/logger.py

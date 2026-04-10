@@ -86,10 +86,12 @@ echo "[5/5] Installing systemd services..."
 
 cp "${PROJECT_DIR}/systemd/logger.service" /etc/systemd/system/
 cp "${PROJECT_DIR}/systemd/shutdown-handler.service" /etc/systemd/system/
+cp "${PROJECT_DIR}/systemd/rfcomm-bind.service" /etc/systemd/system/
 
 systemctl daemon-reload
 systemctl enable logger.service
 systemctl enable shutdown-handler.service
+systemctl enable rfcomm-bind.service
 
 echo "      Done."
 

@@ -1,0 +1,15 @@
+[Unit]
+Description=Bind rfcomm device to the vehicle's OBD adapter
+After=bluetooth.target
+Requires=bluetooth.target
+Before=logger.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+EnvironmentFile=/home/nero/vehicle-logger/.env
+ExecStart=/usr/bin/rfcomm bind ${RFCOMM_PORT} ${BLUETOOTH_MAC} 1
+ExecStop=/usr/bin/rfcomm release ${RFCOMM_PORT}
+
+[Install]
+WantedBy=multi-user.target
