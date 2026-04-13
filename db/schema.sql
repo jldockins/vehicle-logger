@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS log (
     intake_pressure REAL,   -- kPa (MAP)
     timing_advance  REAL,   -- degrees
     fuel_level      REAL,   -- percent
+    battery_voltage REAL,   -- volts
 
     -- GPS
     lat         REAL,

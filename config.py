@@ -62,4 +62,5 @@ OBD_PIDS: list[str] = [
     "INTAKE_PRESSURE",
     "TIMING_ADVANCE",
     "FUEL_LEVEL",
+    "CONTROL_MODULE_VOLTAGE",
 ]

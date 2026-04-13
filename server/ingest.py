@@ -83,7 +83,7 @@ def get_influx_write_api():
 OBD_FIELDS = [
     "speed_obd", "rpm", "engine_load", "coolant_temp", "throttle_pos",
     "fuel_trim_short", "fuel_trim_long", "intake_temp", "intake_pressure",
-    "timing_advance", "fuel_level",
+    "timing_advance", "fuel_level", "battery_voltage",
 ]
 
 GPS_FIELDS = ["lat", "lon", "speed_gps", "heading", "altitude", "gps_fix"]

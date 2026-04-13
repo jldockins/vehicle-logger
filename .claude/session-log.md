@@ -1,53 +1,42 @@
-# Session Log — 2026-04-09
+# Session Log — 2026-04-12
 
 ## Accomplished
-- Flashed Pi Zero 2W with Raspberry Pi OS Lite (hostname: van-logger, user: nero)
-- Cloned repo, installed all dependencies (obd, python-dotenv, gps, pytest, ruff)
-- Fixed setup.sh: removed `rfcomm` package (doesn't exist on Bookworm), replaced with `bluez-tools`
-- Fixed requirements.txt: package name is `obd` not `python-obd`
-- GPS receiver (VK-162) detected as `/dev/ttyACM0` (not `/dev/ttyUSB0`) — updated gpsd config and all code
-- Paired Vgate iCar Pro Bluetooth OBD adapter (MAC: 10:21:3E:4F:43:70, shows as "V-LINK")
-- Bound rfcomm: `sudo rfcomm bind /dev/rfcomm0 10:21:3E:4F:43:70 1`
-- Two successful test drives with real data capture
-- First drive: 676 rows, GPS intermittent (288/676 rows with fix) — identified blocking gpsd issue
-- Fixed poll_gps to use `session.waiting()` for non-blocking reads
-- Second drive: 273 rows, 100% GPS coverage — fix confirmed working
-- 59/59 tests passing locally
+- Finished Grafana dashboard `Vehicle Health` with 8 panels: Speed (time series, mph), RPM (time series), Coolant Temp (stat, °F), Fuel Level (gauge, %), Engine Load (time series, %), GPS Track (geomap route, default view Concord NH↔Boston), Max Speed (stat, mph), Battery Voltage (stat, V — no data yet, needs next drive).
+- Added battery voltage PID to the logger pipeline: `CONTROL_MODULE_VOLTAGE` added to `config.py`, `logger.py` (PID_TO_COLUMN), `db/schema.sql`, and `server/ingest.py` (OBD_FIELDS). Tests pass (63/63). Only takes effect for new trip databases.
+- Discussed odometer PID — python-obd doesn't have a standard command for it. PID 0x01A6 was standardized in 2019+ specs but likely unsupported on the van. Deferred.
+- Identified that `sync.py` has no systemd unit or automatic trigger — the code is written but nothing runs it. Chose Option B (NetworkManager dispatcher) for tomorrow.
 
 ## Current State
 - **Branch**: `main`
-- **Uncommitted changes**: No (session log not yet written at time of commit)
-- **Build/test status**: 59/59 tests passing on Mac, 44/44 Pi-side tests passing on Pi
+- **Uncommitted changes**: `config.py`, `logger.py`, `db/schema.sql`, `server/ingest.py` (battery voltage additions), `.claude/session-log.md`
+- **Build/test status**: 63/63 passing on Mac
+- **Unpushed commits**: none new — working tree has uncommitted edits
 
 ## In Progress
-- GPS speed discrepancy: GPS speed reads ~60% of OBD speed at steady state (e.g., OBD 30 mph → GPS 18 mph)
-- Need to check raw gpsd TPV output while driving (`gpspipe -w | grep speed`) to determine if it's a unit issue
-- gpsd WATCH config shows `scaled: false`, so speed should be in m/s — but the ratio doesn't match any obvious unit confusion
+- **End-to-end test drive** — blocked on sync automation (no trigger for `sync.py` yet)
 
 ## Decisions Made
-- **First vehicle is the van**, not the 4Runner as originally planned
-- **Hostname**: `van-logger` (pattern: `{vehicle}-logger` for fleet)
-- **Username**: `nero` (not the default `pi`)
-- **OBD adapter name**: Shows as "V-LINK" in Bluetooth, not "Vgate" or "iCar"
-- **GPS device path**: `/dev/ttyACM0` (VK-162 u-blox uses ACM, not ttyUSB)
-- **Repo made public** temporarily for git pull to Pi, then back to private
-- **rfcomm persistence not yet solved** — needs to be re-bound after reboot
+- **NetworkManager dispatcher over systemd timer** for sync trigger. More responsive (fires the moment Pi connects to home WiFi) vs polling every N minutes. User chose this approach.
+- **Battery voltage added as `CONTROL_MODULE_VOLTAGE`** → `battery_voltage` column in volts. Standard PID, should work on most vehicles.
+- **Odometer deferred.** Not a standard python-obd command; PID 0x01A6 likely unsupported on older vans. Can attempt a custom query on a future test drive.
+- **GPS Track panel uses Route layer type** — draws connected lines between points instead of individual dots. Default view centered on 42.78°N, -71.3°W, zoom 9 (Concord NH to Boston corridor).
+- **Dashboard layout polish deferred** — user will fine-tune panel sizes/arrangement once all panels are final.
 
 ## Open Questions / Blockers
-- **GPS speed mismatch** — need to diagnose with `gpspipe` while driving. Could be: OBD speedometer inflation (~10%), unit conversion bug, or stale GPS data
-- **rfcomm not persistent across reboots** — need to add to rc.local or a systemd oneshot service
-- **PATH on Pi** — `~/.local/bin` not on PATH by default, pytest/ruff not available without `export PATH="$HOME/.local/bin:$PATH"`
-- Server side (InfluxDB + Grafana on Unraid) not yet set up
-
-## Hardware Confirmed Working
-- Pi Zero 2W: running, SSH accessible at `van-logger.local`
-- VK-162 GPS: 3D fix, 15+ satellites, `/dev/ttyACM0`
-- Vgate iCar Pro BT 3.0: paired, trusted, rfcomm bound at `/dev/rfcomm0`, MAC `10:21:3E:4F:43:70`
+- **No sync trigger exists yet.** `sync.py` needs a NetworkManager dispatcher script on the Pi to fire when connecting to home WiFi. Without this, trip data won't flow automatically after a drive.
+- **Updated logger.py not yet deployed to Pi.** Battery voltage PID is only in the local repo. Need to pull on Pi after committing.
+- **Docker ingest image on Unraid needs rebuild** after `battery_voltage` is added to ingest.py. `cd /mnt/user/appdata/vehicle-ingest && git pull && docker build -t vehicle-ingest .`
+- **Pre-fix trip DBs still on Pi** (`20260409-*.db`) — not worth ingesting, can delete when convenient.
+- **RPM panel didn't persist from yesterday.** User had to recreate it. Possible cause: didn't save the dashboard before closing. Reminded user to save (💾) after changes.
 
 ## Next Steps
-1. Diagnose GPS speed issue — run `gpspipe -w` while driving to check raw speed values
-2. Fix rfcomm persistence across reboots (systemd oneshot or rc.local)
-3. Add `~/.local/bin` to PATH in `.bashrc` on Pi
-4. Set up InfluxDB + Grafana on Unraid
-5. Deploy server/ingest.py on Unraid
-6. Test full sync: drive → come home on WiFi → sync → ingest → dashboard
+1. **Create NetworkManager dispatcher** for `sync.py` on the Pi — fires on home WiFi connect.
+2. **Commit and push** the battery voltage changes.
+3. **Deploy to Pi** — `git pull` on the Pi to get the updated logger with battery voltage.
+4. **Rebuild ingest Docker image on Unraid** — `git pull` + `docker build -t vehicle-ingest .` in `/mnt/user/appdata/vehicle-ingest/`.
+5. **Full end-to-end test drive.** Drive van, come home, verify sync fires automatically, ingest cron picks up the file, Grafana renders new trip with battery voltage. Closes Phase 1.
+6. **Dashboard layout polish** — resize and arrange panels for optimal glanceability.
+
+## Macropad Hub
+- No hub issues. Title is "Vehicle Data Logger", CLAUDE.md present.
+- ⚠️ No scripts configured in hub config (low priority).

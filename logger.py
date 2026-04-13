@@ -61,6 +61,7 @@ PID_TO_COLUMN: dict[str, str] = {
     "INTAKE_PRESSURE": "intake_pressure",
     "TIMING_ADVANCE": "timing_advance",
     "FUEL_LEVEL": "fuel_level",
+    "CONTROL_MODULE_VOLTAGE": "battery_voltage",
 }
 
 
