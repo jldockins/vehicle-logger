@@ -129,14 +129,15 @@ _ODOMETER_CMD = OBDCommand(
 
 
 def probe_odometer(connection: obd.OBD) -> float | None:
-    """One-shot probe for PID 0x01A6. Logs the result and returns km or None."""
+    """One-shot probe for PID 0x01A6.
+
+    Silent when the vehicle does not support the PID (the common case for
+    pre-2019 vehicles), so the probe can stay in place for any future
+    vehicle that does support it without polluting every trip log.
+    """
     try:
         response = connection.query(_ODOMETER_CMD, force=True)
         if response.is_null() or response.value is None:
-            log.info("Odometer PID 0x01A6: not supported")
-            for msg in response.messages or []:
-                raw = msg.data.hex() if msg.data else "(none)"
-                log.info("  raw: %s", raw)
             return None
         km = response.value
         log.info("Odometer PID 0x01A6: %.1f km (%.1f mi)", km, km * KM_TO_MILES)
