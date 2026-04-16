@@ -16,9 +16,13 @@ from pathlib import Path
 from types import FrameType
 
 import obd
+from obd import OBDCommand
+from obd.protocols import ECU
 from gps import gps, WATCH_ENABLE, WATCH_NEWSTYLE
 
 import config
+
+KM_TO_MILES = 0.621371
 
 # ---------------------------------------------------------------------------
 # Logging setup
@@ -100,6 +104,46 @@ def poll_obd(connection: obd.OBD) -> dict[str, float | None]:
             log.debug("Error polling PID %s: %s", pid, exc)
             data[column] = None
     return data
+
+
+def _decode_odometer(messages: list) -> float | None:
+    """Decode SAE J1979 PID 0xA6 response into kilometers."""
+    if not messages:
+        return None
+    data = messages[0].data
+    if not data or len(data) < 6:
+        return None
+    raw = int.from_bytes(data[2:6], "big")
+    return raw / 10.0
+
+
+_ODOMETER_CMD = OBDCommand(
+    "ODOMETER",
+    "Vehicle Odometer (PID 0xA6)",
+    b"01A6",
+    6,
+    _decode_odometer,
+    ECU.ENGINE,
+    False,
+)
+
+
+def probe_odometer(connection: obd.OBD) -> float | None:
+    """One-shot probe for PID 0x01A6. Logs the result and returns km or None."""
+    try:
+        response = connection.query(_ODOMETER_CMD, force=True)
+        if response.is_null() or response.value is None:
+            log.info("Odometer PID 0x01A6: not supported")
+            for msg in response.messages or []:
+                raw = msg.data.hex() if msg.data else "(none)"
+                log.info("  raw: %s", raw)
+            return None
+        km = response.value
+        log.info("Odometer PID 0x01A6: %.1f km (%.1f mi)", km, km * KM_TO_MILES)
+        return km
+    except Exception as exc:
+        log.debug("Odometer probe error: %s", exc)
+        return None
 
 
 def poll_dtcs(connection: obd.OBD) -> list[tuple[str, str]]:
@@ -325,6 +369,7 @@ def main() -> None:
                 trip_db = create_trip_db(trip_id)
                 last_engine_time = time.monotonic()
                 log.info("Trip started: %s", trip_id)
+                probe_odometer(obd_conn)
 
             # --- Trip active: write data ---
             if engine_on and trip_db is not None:

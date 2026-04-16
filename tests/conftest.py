@@ -9,6 +9,7 @@ obd_mock = MagicMock()
 gps_mock = MagicMock()
 
 sys.modules["obd"] = obd_mock
+sys.modules["obd.protocols"] = obd_mock.protocols
 sys.modules["gps"] = gps_mock
 
 # Re-export the mock constants that logger.py imports at module level
